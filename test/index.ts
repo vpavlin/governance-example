@@ -37,7 +37,7 @@ describe("Greeter", function () {
 
   const newProposal =  async (i:number) => {
     //const pid = await governance.hashProposal([addr3.address], [1], [[]], ethers.utils.id("Example proposal "+i))
-    const tx = await governance.propose([addr3.address], [ethers.utils.parseEther("1")], [[]], "Example proposal "+i);
+    const tx = await governance.propose([addr3.address], [ethers.utils.parseEther("1")], [ethers.utils.defaultAbiCoder.encode([], [])], "Example proposal "+i);
     const proposalID = await tx.wait();
     const filter = governance.filters.ProposalCreated(null, null, null, null, null, null, null, null, null);
     const results = proposalID!.events!.find(event => event.event === 'ProposalCreated')
@@ -49,12 +49,8 @@ describe("Greeter", function () {
   }
 
   const execute = async (e:any, pid0: any) => {
-    console.log("executing")
-    console.log(e.args)
-    console.log(e.args._values)
     const tx = await governance.execute(e.args.targets, e.args[3], e.args.calldatas, ethers.utils.id(e.args.description));
     const receipt = await tx.wait()
-    console.log("done")
     return pid0
   }
 
@@ -133,6 +129,8 @@ describe("Greeter", function () {
   it("Should execute on the result", async () => {
     const pid0 = await newProposal(0);
 
+    await owner.sendTransaction({to: governance.address, value: ethers.utils.parseEther("1")})
+
     await ethers.provider.send('evm_mine', []);
 
     await governance.connect(addr1).castVote(pid0, VoteType.Against);
@@ -147,21 +145,19 @@ describe("Greeter", function () {
 
     const filter = governance.filters.ProposalCreated(null, null, null, null, null, null, null, null, null)
     const events = await governance.queryFilter(filter, 0)
-    events.map(async (e) => {
+    await Promise.all(events.map(async (e) => {
         if (e.args.proposalId.eq(pid0)) {
-          execute(e, pid0)
+          await execute(e, pid0)
         }
-      })
+      }))
 
     const balancePost = await addr3.getBalance()
 
-    console.log(balancePre)
-    console.log(balancePost)
+    expect(
+      balancePre.add(ethers.utils.parseEther("1"))
+    ).to.be.equal(balancePost)
+   
 
-    
-
-    
-    //await governance.execute()
-
+  
   })
 });
